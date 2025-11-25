@@ -139,17 +139,28 @@ export function parseCSV(csvContent: string): Transaction[] {
   const lines = csvContent.trim().split('\n');
   if (lines.length < 2) return [];
 
-  // Détection format Boursobank (pas de séparateur, format collé)
-  // Format: DDMMYYYY+MONTANT+Type+Description (ex: 01092025-1107VirementVIR INST...)
-  const boursobankRegex = /^(\d{8})([+-]?\d+)(\w+)(.+)$/;
-  const isBoursobank = lines.some(line => boursobankRegex.test(line.trim()));
+  // Détection format Boursobank (format collé sans séparateur)
+  // Format: DDMMYYYY-MONTANT+Type+Description (ex: 01092025-1107VirementVIR INST...)
+  // Note: première ligne = en-tête compte à ignorer
+  const boursobankRegex = /^(\d{8})([+-]\d+)([A-Za-z])(.*)$/;
+  const isBoursobank = lines.some(line => {
+    const trimmed = line.trim();
+    // Ignorer la ligne d'en-tête qui contient des espaces
+    if (trimmed.includes(' ') && trimmed.includes('--')) return false;
+    return boursobankRegex.test(trimmed);
+  });
 
   if (isBoursobank) {
     const transactions: Transaction[] = [];
+    
     for (const line of lines) {
-      const match = line.trim().match(boursobankRegex);
+      const trimmed = line.trim();
+      // Skip header line
+      if (trimmed.includes(' ') || trimmed.includes('--') || trimmed.length < 10) continue;
+      
+      const match = trimmed.match(boursobankRegex);
       if (match) {
-        const [, dateStr, amountStr] = match;
+        const [, dateStr, amountStr, firstChar, rest] = match;
         
         // Parse date: DDMMYYYY => DD/MM/YYYY
         const day = dateStr.substring(0, 2);
@@ -157,22 +168,24 @@ export function parseCSV(csvContent: string): Transaction[] {
         const year = dateStr.substring(4, 8);
         const date = parseDate(`${day}/${month}/${year}`, 'DD/MM/YYYY');
 
-        // Parse amount: montant peut être négatif avec - ou positif
-        // Diviser par 100 si le montant semble être en centimes (sans virgule/point)
-        const amount = parseAmount(amountStr) / 100; // Boursobank uses cents
+        // Parse amount (en centimes)
+        const amount = parseAmount(amountStr) / 100;
 
-        // Extract label from the rest of the line (after amount)
-        const labelMatch = line.trim().match(/^\d{8}[+-]?\d+(\w+)(.+?)(?:\d{8}0)?(?:\w+)?$/);
-        const label = labelMatch ? `${labelMatch[1]} ${labelMatch[2]}`.trim() : line;
+        // Extract label (tout après le montant)
+        const label = (firstChar + rest).replace(/\d{8}0\w+$/, '').trim();
 
-        // Only keep debits (negative amounts)
-        if (date && amount < 0) {
-          transactions.push({ date, label: label.trim(), amount: Math.abs(amount) });
+        // Only keep debits
+        if (date && amount < 0 && label) {
+          transactions.push({ date, label, amount: Math.abs(amount) });
         }
       }
     }
-    return transactions.sort((a, b) => a.date.getTime() - b.date.getTime());
+    
+    if (transactions.length > 0) {
+      return transactions.sort((a, b) => a.date.getTime() - b.date.getTime());
+    }
   }
+
 
   
   const firstLine = lines[0];
