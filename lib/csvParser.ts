@@ -178,7 +178,7 @@ export function detectRecurringSubscriptions(transactions: Transaction[]): Detec
   
   const subscriptions: DetectedSubscription[] = [];
   
-  for (const [key, txns] of groups) {
+  for (const [key, txns] of Array.from(groups)) {
     if (txns.length < 2) continue;
     
     const intervals: number[] = [];
