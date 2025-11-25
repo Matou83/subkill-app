@@ -138,6 +138,34 @@ function calculateNextRenewal(transactions: Transaction[]): string {
 export function parseCSV(csvContent: string): Transaction[] {
   const lines = csvContent.trim().split('\n');
   if (lines.length < 2) return [];
+
+    // Détection format Boursobank (pas de séparateur, pas d'en-tête)
+  // Format: DDMMYYYY+Montant+Type+Libellé+DateOp+Catégorie
+  const boursobankRegex = /^(\d{8})([+-]?\d+)([A-Za-z\s]+)(.+?)(\d{8}0)([A-Za-z]+)$/;
+  const isBoursobank = lines.some(line => boursobankRegex.test(line.trim()));
+  
+  if (isBoursobank) {
+    const transactions: Transaction[] = [];
+    for (const line of lines) {
+      const match = line.trim().match(boursobankRegex);
+      if (match) {
+        const [, dateStr, amountStr, , label, ,] = match;
+        // Parse date: DDMMYYYY -> DD/MM/YYYY
+        const day = dateStr.substring(0, 2);
+        const month = dateStr.substring(2, 4);
+        const year = dateStr.substring(4, 8);
+        const date = parseDate(`${day}/${month}/${year}`, 'DD/MM/YYYY');
+        
+        // Parse amount (peut être négatif)
+        const amount = parseAmount(amountStr) / 100; // Boursobank uses cents
+        
+        if (date && amount < 0) { // Ne garder que les débits (négatifs)
+          transactions.push({ date, label: label.trim(), amount: Math.abs(amount) });
+        }
+      }
+    }
+    return transactions.sort((a, b) => a.date.getTime() - b.date.getTime());
+  }
   
   const firstLine = lines[0];
   const separator = firstLine.includes(';') ? ';' : ',';
