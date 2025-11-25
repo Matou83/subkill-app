@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase'; // Assurez-vous que ce fichier existe
+import { supabase } from '@/lib/supabase';
 import { 
   Plus, 
   AlertCircle, 
@@ -14,8 +14,11 @@ import {
   X,
   Loader2,
   History,
-  CheckCircle2
+  CheckCircle2,
+  Upload // Added icon
 } from 'lucide-react';
+import CSVImport from '@/components/CSVImport';
+import { DetectedSubscription } from '@/lib/csvParser';
 
 // --- TYPES ---
 interface Subscription {
@@ -49,7 +52,7 @@ const calculateDaysUntilRenewal = (dateString: string) => {
   const diffTime = renewal.getTime() - today.getTime();
   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   
-  return diffDays; // Can be negative if overdue
+  return diffDays;
 };
 
 // --- COMPONENTS ---
@@ -115,7 +118,7 @@ const Badge = ({ children, variant = 'default' }: { children: React.ReactNode; v
   );
 };
 
-// --- MOCK NETFLIX INTERFACE (Restée identique pour l'UX) ---
+// --- MOCK NETFLIX INTERFACE ---
 const NetflixMock = ({ onClose }: { onClose: () => void }) => (
   <div className="fixed inset-0 z-[60] bg-black text-white font-sans overflow-y-auto animate-in slide-in-from-bottom-full duration-500">
     <div className="bg-[#222] px-4 py-2 flex items-center gap-4 border-b border-[#333]">
@@ -169,8 +172,9 @@ export default function SubKillApp() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showNetflixMock, setShowNetflixMock] = useState(false);
-  const [actionLoading, setActionLoading] = useState(false); // Pour les actions (ajout/suppression)
+  const [actionLoading, setActionLoading] = useState(false);
   const [showSuccessToast, setShowSuccessToast] = useState<string | null>(null);
+  const [showCSVImport, setShowCSVImport] = useState(false); // NEW CSV State
 
   // Form State
   const [newSub, setNewSub] = useState({ name: '', price: '', date: '' });
@@ -199,7 +203,6 @@ export default function SubKillApp() {
   }
 
   // --- CALCULATED STATS ---
-  // Using Supabase fields: monthly_cost instead of price
   const monthlyCost = subscriptions.reduce((acc, sub) => acc + sub.monthly_cost, 0);
   const annualCost = monthlyCost * 12;
   const activeAlerts = subscriptions.filter(sub => calculateDaysUntilRenewal(sub.renewal_date) <= 7).length;
@@ -215,7 +218,7 @@ export default function SubKillApp() {
       renewal_date: newSub.date,
       status: 'active' as const,
       icon: newSub.name.charAt(0).toUpperCase(),
-      user_id: null // À remplacer par auth.user.id si l'auth est implémentée
+      user_id: null
     };
 
     try {
@@ -235,13 +238,34 @@ export default function SubKillApp() {
       }
     } catch (err) {
       console.error('Error adding subscription:', err);
-      // Optional: set form error state here
     } finally {
       setActionLoading(false);
     }
   }
 
-  // Fonction pour supprimer de Supabase (Hard Delete selon instructions)
+  // NEW: CSV Import Handler
+  const handleCSVImport = async (detected: DetectedSubscription[]) => {
+    setActionLoading(true);
+    try {
+      for (const sub of detected) {
+        await supabase.from('subscriptions').insert({
+          service_name: sub.service_name,
+          monthly_cost: sub.monthly_cost,
+          renewal_date: sub.renewal_date,
+          status: 'active',
+          icon: sub.icon,
+        });
+      }
+      setShowSuccessToast(`Successfully imported ${detected.length} subscriptions!`);
+      fetchSubscriptions();
+    } catch (err) {
+      console.error("Import error:", err);
+      alert("Failed to import some subscriptions.");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   async function handleDeleteSubscription(id: number) {
     const { error } = await supabase
       .from('subscriptions')
@@ -258,10 +282,7 @@ export default function SubKillApp() {
 
   const handleCancelClick = (sub: Subscription) => {
     setSelectedSub(sub);
-    
-    // Simple transition simulation
     setTimeout(() => {
-      // Logic to determine view based on service type or name
       if (sub.service_name.toLowerCase().includes('adobe') || sub.service_name.toLowerCase().includes('gym')) {
         setView('cancel-unknown');
       } else {
@@ -293,10 +314,8 @@ export default function SubKillApp() {
     setActionLoading(true);
     
     try {
-      // 1. Delete from Supabase (per instructions)
       await handleDeleteSubscription(selectedSub.id);
 
-      // 2. Add to local history for UI feedback
       const today = new Date().toISOString();
       setHistory([
         { 
@@ -307,7 +326,6 @@ export default function SubKillApp() {
         ...history
       ]);
 
-      // 3. Reset UI states
       setShowConfirmModal(false);
       setSelectedSub(null);
       setView('dashboard');
@@ -347,10 +365,15 @@ export default function SubKillApp() {
 
       <div className="flex justify-between items-center">
         <h2 className="text-xl font-bold text-gray-900">Your Subscriptions</h2>
-        <Button onClick={() => setShowAddModal(true)}>
-          <Plus size={18} />
-          Add subscription
-        </Button>
+        <div className="flex gap-2">
+          <Button onClick={() => setShowCSVImport(true)} variant="secondary" className="flex items-center gap-2">
+            <Upload className="h-4 w-4" /> Import CSV
+          </Button>
+          <Button onClick={() => setShowAddModal(true)}>
+            <Plus size={18} />
+            Add subscription
+          </Button>
+        </div>
       </div>
 
       <div className="space-y-3">
@@ -721,7 +744,7 @@ export default function SubKillApp() {
   );
 
   // --- INITIAL LOADING STATE ---
-  if (loading && view !== 'dashboard' && !showConfirmModal && !showAddModal) {
+  if (loading && view !== 'dashboard' && !showConfirmModal && !showAddModal && !showCSVImport) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#F8F9FC]">
         <Loader2 className="animate-spin text-[#2563EB]" size={40} />
@@ -754,6 +777,11 @@ export default function SubKillApp() {
 
       {renderAddModal()}
       {renderConfirmModal()}
+      <CSVImport 
+        isOpen={showCSVImport}
+        onClose={() => setShowCSVImport(false)}
+        onImport={handleCSVImport}
+      />
       {showNetflixMock && <NetflixMock onClose={() => setShowNetflixMock(false)} />}
     </div>
   );
