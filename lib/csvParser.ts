@@ -142,8 +142,7 @@ export function parseCSV(csvContent: string): Transaction[] {
   // Détection format Boursobank (format collé sans séparateur)
   // Format: DDMMYYYY-MONTANT+Type+Description (ex: 01092025-1107VirementVIR INST...)
   // Note: première ligne = en-tête compte à ignorer
-  const boursobankRegex = /^(\d{8})([+-]?\d+)([A-Za-z]+)(.*)$/;
-  const isBoursobank = lines.some(line => {
+  const boursobankRegex = /^(\d{8})([+-]?\d+)(.+)$/;  const isBoursobank = lines.some(line => {
     const trimmed = line.trim();
     // Ignorer la ligne d'en-tête qui contient des espaces
     if (trimmed.includes(' ') && trimmed.includes('--')) return false;
@@ -160,8 +159,7 @@ export function parseCSV(csvContent: string): Transaction[] {
       
       const match = trimmed.match(boursobankRegex);
       if (match) {
-        const [, dateStr, amountStr, firstChar, rest] = match;
-        
+        const [, dateStr, amountStr, description] = match;        
         // Parse date: DDMMYYYY => DD/MM/YYYY
         const day = dateStr.substring(0, 2);
         const month = dateStr.substring(2, 4);
@@ -172,8 +170,7 @@ export function parseCSV(csvContent: string): Transaction[] {
         const amount = parseAmount(amountStr) / 100;
 
         // Extract label (tout après le montant)
-        const label = (firstChar + rest).replace(/\d{8}0\w+$/, '').trim();
-
+        const label = description.replace(/\d{8}0\w+$/, '').trim();
         // Only keep debits
         if (date && amount < 0 && label) {
           transactions.push({ date, label, amount: Math.abs(amount) });
