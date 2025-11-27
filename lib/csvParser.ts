@@ -142,7 +142,7 @@ export function parseCSV(csvContent: string): Transaction[] {
   // Détection format Boursobank (format collé sans séparateur)
   // Format: DDMMYYYY-MONTANT+Type+Description (ex: 01092025-1107VirementVIR INST...)
   // Note: première ligne = en-tête compte à ignorer
-  const boursobankRegex = /^(\d{8})([+-]\d+)([A-Za-z])(.*)$/;
+  const boursobankRegex = /^(\d{8})([+-]?\d+)([A-Za-z])(.+)$/;
   const isBoursobank = lines.some(line => {
     const trimmed = line.trim();
     // Ignorer la ligne d'en-tête qui contient des espaces
