@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef } from 'react';
-import { parseCSV, detectRecurringSubscriptions, DetectedSubscription } from '@/lib/csvParser';
+import { parseBankCSV, DetectedSubscription } from '@/lib/csvParser';
 
 interface CSVImportProps {
   isOpen: boolean;
@@ -57,16 +57,8 @@ export default function CSVImport({ isOpen, onClose, onImport }: CSVImportProps)
 
     try {
       const content = await file.text();
-      const transactions = parseCSV(content);
-      
-      if (transactions.length === 0) {
-        setError('No transactions found in file');
-        setIsProcessing(false);
-        return;
-      }
+      const subscriptions = parseBankCSV(content);
 
-      const subscriptions = detectRecurringSubscriptions(transactions);
-      
       if (subscriptions.length === 0) {
         setError('No recurring subscriptions detected');
         setIsProcessing(false);
@@ -76,9 +68,10 @@ export default function CSVImport({ isOpen, onClose, onImport }: CSVImportProps)
       setDetected(subscriptions);
       setSelected(new Set(subscriptions.map((_, i) => i)));
     } catch (err) {
+      console.error(err);
       setError('Failed to parse CSV file');
     }
-    
+
     setIsProcessing(false);
   };
 
@@ -109,9 +102,8 @@ export default function CSVImport({ isOpen, onClose, onImport }: CSVImportProps)
         {detected.length === 0 ? (
           <>
             <div
-              className={`border-2 border-dashed rounded-xl p-8 text-center transition-colors ${
-                dragActive ? 'border-blue-500 bg-blue-50' : 'border-gray-300'
-              }`}
+              className={`border-2 border-dashed rounded-xl p-8 text-center transition-colors ${dragActive ? 'border-blue-500 bg-blue-50' : 'border-gray-300'
+                }`}
               onDragEnter={handleDrag}
               onDragLeave={handleDrag}
               onDragOver={handleDrag}
@@ -151,14 +143,13 @@ export default function CSVImport({ isOpen, onClose, onImport }: CSVImportProps)
             <p className="text-gray-600 mb-4">
               Found {detected.length} recurring subscription{detected.length > 1 ? 's' : ''}
             </p>
-            
+
             <div className="space-y-2 mb-4">
               {detected.map((sub, index) => (
                 <label
                   key={index}
-                  className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
-                    selected.has(index) ? 'border-blue-500 bg-blue-50' : 'border-gray-200'
-                  }`}
+                  className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${selected.has(index) ? 'border-blue-500 bg-blue-50' : 'border-gray-200'
+                    }`}
                 >
                   <input
                     type="checkbox"

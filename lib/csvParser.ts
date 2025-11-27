@@ -9,21 +9,9 @@ export interface Transaction {
 export interface DetectedSubscription {
   service_name: string;
   monthly_cost: number;
-  renewal_date: string;
+  renewal_date: string; // ISO Date string
   confidence: 'high' | 'medium' | 'low';
   icon: string;
-}
-
-interface BankProfile {
-  name: string;
-  separator: string;
-  dateFormat: 'DD/MM/YYYY' | 'MM/DD/YYYY' | 'YYYY-MM-DD';
-  colIndex: {
-    date: number;
-    label: number;
-    amount: number;
-  };
-  headerSignature: string[];
 }
 
 // --- KNOWN SERVICES ---
@@ -33,8 +21,9 @@ const KNOWN_SERVICES: Record<string, { name: string; icon: string }> = {
   'apple': { name: 'Apple Services', icon: '🍎' },
   'google': { name: 'Google', icon: '🌐' },
   'amazon prime': { name: 'Amazon Prime', icon: '📦' },
+  'prime video': { name: 'Prime Video', icon: '🎬' },
   'disney': { name: 'Disney+', icon: '✨' },
-  'adobe': { name: 'Adobe Creative Cloud', icon: '🎨' },
+  'adobe': { name: 'Adobe', icon: '🎨' },
   'canva': { name: 'Canva', icon: '🎨' },
   'chatgpt': { name: 'ChatGPT', icon: '🤖' },
   'openai': { name: 'OpenAI', icon: '🤖' },
@@ -44,210 +33,207 @@ const KNOWN_SERVICES: Record<string, { name: string; icon: string }> = {
   'bouygues': { name: 'Bouygues', icon: '📱' },
   'edf': { name: 'EDF', icon: '⚡' },
   'engie': { name: 'Engie', icon: '⚡' },
+  'fitness': { name: 'Gym', icon: '💪' },
   'basic fit': { name: 'Basic Fit', icon: '💪' },
   'keep cool': { name: 'Keep Cool', icon: '💪' },
-  'uber': { name: 'Uber One', icon: '🚗' },
-  'deliveroo': { name: 'Deliveroo Plus', icon: '🍔' },
+  'uber': { name: 'Uber', icon: '🚗' },
+  'deliveroo': { name: 'Deliveroo', icon: '🍔' },
   'github': { name: 'GitHub', icon: '💻' },
-  'figma': { name: 'Figma', icon: '🎨' },
-  'notion': { name: 'Notion', icon: '📝' },
-  'slack': { name: 'Slack', icon: '💬' },
-  'youtube': { name: 'YouTube Premium', icon: '▶️' },
-  'deezer': { name: 'Deezer', icon: '🎵' },
-  'canal': { name: 'Canal+', icon: '📺' },
-  'crunchyroll': { name: 'Crunchyroll', icon: '🍥' },
+  'vercel': { name: 'Vercel', icon: '▲' },
+  'sncf': { name: 'SNCF', icon: '🚆' },
+  'alan': { name: 'Alan', icon: '⚕️' },
+  'navigo': { name: 'Navigo', icon: '🚇' },
+  'qonto': { name: 'Qonto', icon: '🏦' },
 };
 
-// --- BANK PROFILES ---
-const BANK_PROFILES: BankProfile[] = [
-  {
-    name: 'Boursorama',
-    separator: ';',
-    dateFormat: 'DD/MM/YYYY',
-    colIndex: { date: 0, label: 1, amount: 2 },
-    headerSignature: ['dateOp', 'label', 'amount']
-  },
-  {
-    name: 'BNP Paribas',
-    separator: ';',
-    dateFormat: 'DD/MM/YYYY',
-    colIndex: { date: 0, label: 2, amount: 3 },
-    headerSignature: ['Date', 'Valeur', 'Libelle', 'Montant']
-  },
-  {
-    name: 'Credit Agricole',
-    separator: ';',
-    dateFormat: 'DD/MM/YYYY',
-    colIndex: { date: 0, label: 1, amount: 2 },
-    headerSignature: ['Date', 'Libelle', 'Montant']
-  },
-  {
-    name: 'Generic',
-    separator: ',',
-    dateFormat: 'YYYY-MM-DD',
-    colIndex: { date: 0, label: 1, amount: 2 },
-    headerSignature: ['date', 'description', 'amount']
-  }
-];
-
 // --- HELPER FUNCTIONS ---
-function detectBankProfile(headers: string[]): BankProfile {
-  const normalizedHeaders = headers.map(h => h.toLowerCase().trim());
-  for (const profile of BANK_PROFILES) {
-    const matchCount = profile.headerSignature.filter(sig => 
-      normalizedHeaders.some(h => h.includes(sig.toLowerCase()))
-    ).length;
-    if (matchCount >= 2) return profile;
-  }
-  return BANK_PROFILES[BANK_PROFILES.length - 1];
-}
 
-function parseDate(dateStr: string, format: string): Date {
-  const parts = dateStr.split(/[\/\-]/);
-  switch (format) {
-    case 'DD/MM/YYYY':
-      return new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
-    case 'MM/DD/YYYY':
-      return new Date(parseInt(parts[2]), parseInt(parts[0]) - 1, parseInt(parts[1]));
-    default:
-      return new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
-  }
-}
-
-function parseAmount(amountStr: string): number {
-  const cleaned = amountStr.replace(/[^\d,.\-]/g, '').replace(',', '.');
-  return Math.abs(parseFloat(cleaned));
-}
-
-function findKnownService(label: string): { name: string; icon: string } | null {
-  const lowerLabel = label.toLowerCase();
-  for (const [keyword, service] of Object.entries(KNOWN_SERVICES)) {
-    if (lowerLabel.includes(keyword)) return service;
+function parseFrenchDate(dateStr: string): Date | null {
+  if (!dateStr) return null;
+  // Format attendu: JJ/MM/AAAA
+  const parts = dateStr.trim().split('/');
+  if (parts.length === 3) {
+    const day = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10) - 1; // JS months are 0-indexed
+    const year = parseInt(parts[2], 10);
+    const date = new Date(year, month, day);
+    if (!isNaN(date.getTime())) return date;
   }
   return null;
 }
 
-function calculateNextRenewal(transactions: Transaction[]): string {
-  const lastDate = transactions[0].date;
-  const nextDate = new Date(lastDate);
-  nextDate.setMonth(nextDate.getMonth() + 1);
-  return nextDate.toISOString().split('T')[0];
+function parseAmount(amountStr: string): number {
+  if (!amountStr) return 0;
+  // Remplacer virgule par point (format français "12,50" -> "12.50")
+  // Supprimer les espaces insécables éventuels
+  const cleanStr = amountStr.replace(/\s/g, '').replace(',', '.');
+  const val = parseFloat(cleanStr);
+  return isNaN(val) ? 0 : val;
 }
 
-// --- MAIN EXPORT FUNCTIONS ---
-export function parseCSV(csvContent: string): Transaction[] {
-  const lines = csvContent.trim().split('\n');
+// --- MAIN PARSER ---
+
+export function parseBankCSV(csvContent: string): DetectedSubscription[] {
+  const lines = csvContent.split(/\r?\n/);
+
+  // Si moins de 2 lignes, pas de données utiles (la ligne 1 est l'entête/solde)
   if (lines.length < 2) return [];
 
-  // Détection format Boursobank (format collé sans séparateur)
-  // Format: DDMMYYYY-MONTANT+Type+Description (ex: 01092025-1107VirementVIR INST...)
-  // Note: première ligne = en-tête compte à ignorer
-  const boursobankRegex = /^(\d{8})([+-]?\d+)(.+)$/;  const isBoursobank = lines.some(line => {
-    const trimmed = line.trim();
-    // Ignorer la ligne d'en-tête qui contient des espaces
-    if (trimmed.includes(' ') && trimmed.includes('--')) return false;
-    return boursobankRegex.test(trimmed);
-  });
-
-  if (isBoursobank) {
-    const transactions: Transaction[] = [];
-    
-    for (const line of lines) {
-      const trimmed = line.trim();
-      // Skip header line
-      if (trimmed.includes(' ') || trimmed.includes('--') || trimmed.length < 10) continue;
-      
-      const match = trimmed.match(boursobankRegex);
-      if (match) {
-        const [, dateStr, amountStr, description] = match;        
-        // Parse date: DDMMYYYY => DD/MM/YYYY
-        const day = dateStr.substring(0, 2);
-        const month = dateStr.substring(2, 4);
-        const year = dateStr.substring(4, 8);
-        const date = parseDate(`${day}/${month}/${year}`, 'DD/MM/YYYY');
-
-        // Parse amount (en centimes)
-        const amount = parseAmount(amountStr) / 100;
-
-        // Extract label (tout après le montant)
-        const label = description.replace(/\d{8}0\w+$/, '').trim();
-        // Only keep debits
-        if (date && amount < 0 && label) {
-          transactions.push({ date, label, amount: Math.abs(amount) });
-        }
-      }
-    }
-    
-    if (transactions.length > 0) {
-      return transactions.sort((a, b) => a.date.getTime() - b.date.getTime());
-    }
-  }
-
-
-  
-  const firstLine = lines[0];
-  const separator = firstLine.includes(';') ? ';' : ',';
-  const headers = firstLine.split(separator).map(h => h.replace(/"/g, '').trim());
-  const profile = detectBankProfile(headers);
-  
   const transactions: Transaction[] = [];
-  
+
+  // On commence à i = 1 pour sauter la 1ère ligne (Entête/Solde)
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i].trim();
     if (!line) continue;
-    const cols = line.split(separator).map(c => c.replace(/"/g, '').trim());
-    try {
-      const transaction: Transaction = {
-        date: parseDate(cols[profile.colIndex.date], profile.dateFormat),
-        label: cols[profile.colIndex.label] || '',
-        amount: parseAmount(cols[profile.colIndex.amount])
-      };
-      if (transaction.amount > 0 && transaction.label) {
-        transactions.push(transaction);
-      }
-    } catch (e) {
-      console.warn('Failed to parse line:', line);
-    }
+
+    const cols = line.split(';');
+
+    // Vérification basique de la structure (au moins 5 colonnes pour avoir date, montant, libellé)
+    if (cols.length < 5) continue;
+
+    // Colonne 0 : Date
+    const date = parseFrenchDate(cols[0]);
+    if (!date) continue;
+
+    // Colonne 1 : Montant
+    const amount = parseAmount(cols[1]);
+
+    // On ne garde que les DÉPENSES (montants négatifs)
+    if (amount >= 0) continue;
+
+    // Colonne 4 : Libellé (C'est là que se trouve "CB NETFLIX...")
+    // Par sécurité, on regarde aussi la colonne 2 (Type) ou 3 si la 4 est vide, 
+    // mais dans votre fichier c'est la 4.
+    const label = cols[4] ? cols[4].trim() : 'Inconnu';
+
+    transactions.push({
+      date,
+      label,
+      amount: Math.abs(amount) // On stocke en positif pour l'affichage
+    });
   }
-  return transactions.sort((a, b) => b.date.getTime() - a.date.getTime());
+
+  return detectSubscriptions(transactions);
 }
 
-export function detectRecurringSubscriptions(transactions: Transaction[]): DetectedSubscription[] {
-  const groups: Map<string, Transaction[]> = new Map();
-  
-  for (const t of transactions) {
-    const service = findKnownService(t.label);
-    const key = service ? service.name : t.label.substring(0, 20).toLowerCase();
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key)!.push(t);
-  }
-  
-  const subscriptions: DetectedSubscription[] = [];
-  
-  for (const [key, txns] of Array.from(groups)) {
-    if (txns.length < 2) continue;
-    
-    const intervals: number[] = [];
-    for (let i = 1; i < txns.length; i++) {
-      const days = Math.abs(txns[i-1].date.getTime() - txns[i].date.getTime()) / (1000 * 60 * 60 * 24);
-      intervals.push(days);
+function detectSubscriptions(transactions: Transaction[]): DetectedSubscription[] {
+  // Regroupement par "Libellé Simplifié"
+  const groups = new Map<string, Transaction[]>();
+
+  transactions.forEach(t => {
+    // Nettoyage du libellé pour trouver le "vrai" nom du service
+    // Ex: "CB NETFLIX COM 01/10/25" -> "NETFLIX"
+    let simpleLabel = t.label.toUpperCase();
+
+    // Mots clés bancaires à supprimer
+    const junkWords = ['CB', 'PRLV', 'SEPA', 'VIR', 'INST', 'PAIEMENT', 'CARTE', 'ACHAT', 'FACTURE', 'COM', 'BILL'];
+    junkWords.forEach(word => {
+      // Remplace "CB " par "" mais garde "CB" si c'est dans un mot
+      const regex = new RegExp(`\\b${word}\\b`, 'g');
+      simpleLabel = simpleLabel.replace(regex, '');
+    });
+
+    // Supprimer les dates (JJ/MM/AA ou JJ/MM)
+    simpleLabel = simpleLabel.replace(/\d{2}\/\d{2}(\/\d{2})?/g, '');
+
+    // Supprimer les séries de chiffres (références)
+    simpleLabel = simpleLabel.replace(/\d+/g, '');
+
+    // Supprimer les caractères spéciaux sauf espaces
+    simpleLabel = simpleLabel.replace(/[^A-Z\s]/g, ' ');
+
+    // Nettoyer les espaces multiples
+    simpleLabel = simpleLabel.trim().replace(/\s+/g, ' ');
+
+    // Vérifier si ça correspond à un service connu (Fuzzy match)
+    let groupKey = simpleLabel;
+    let isKnownService = false;
+
+    for (const [key, info] of Object.entries(KNOWN_SERVICES)) {
+      if (simpleLabel.toLowerCase().includes(key)) {
+        groupKey = `__KNOWN__${key}`; // Clé spéciale pour regrouper tous les "Netflix"
+        isKnownService = true;
+        break;
+      }
     }
-    
-    const avgInterval = intervals.reduce((a, b) => a + b, 0) / intervals.length;
-    
-    if (avgInterval >= 25 && avgInterval <= 35) {
-      const service = findKnownService(txns[0].label);
-      const avgAmount = txns.reduce((sum, t) => sum + t.amount, 0) / txns.length;
-      const confidence: 'high' | 'medium' | 'low' = txns.length >= 3 ? 'high' : 'medium';
-      
-      subscriptions.push({
-        service_name: service?.name || txns[0].label.substring(0, 30),
-        monthly_cost: Math.round(avgAmount * 100) / 100,
-        renewal_date: calculateNextRenewal(txns),
-        confidence,
-        icon: service?.icon || '📄'
+
+    if (!groups.has(groupKey)) {
+      groups.set(groupKey, []);
+    }
+    groups.get(groupKey)?.push(t);
+  });
+
+  const detected: DetectedSubscription[] = [];
+
+  // Conversion Map -> Array pour itérer
+  Array.from(groups.entries()).forEach(([key, txs]) => {
+    // Trier par date décroissante (le plus récent en premier)
+    txs.sort((a, b) => b.date.getTime() - a.date.getTime());
+
+    const isKnown = key.startsWith('__KNOWN__');
+    const count = txs.length;
+
+    // CRITÈRES DE DÉTECTION :
+    // 1. Si service connu (ex: Netflix) : 1 seule transaction suffit.
+    // 2. Si inconnu : Il faut au moins 2 transactions.
+    if (!isKnown && count < 2) return;
+
+    // Estimation de la récurrence
+    let isRecurring = false;
+
+    if (isKnown) {
+      isRecurring = true;
+    } else {
+      // Calculer l'écart entre la dernière et l'avant-dernière transaction
+      const lastTx = txs[0];
+      const prevTx = txs[1];
+      const diffTime = Math.abs(lastTx.date.getTime() - prevTx.date.getTime());
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+      // Mensuel (entre 20 et 40 jours) ou Annuel (entre 350 et 380 jours)
+      if ((diffDays >= 20 && diffDays <= 45) || (diffDays >= 350 && diffDays <= 380)) {
+        isRecurring = true;
+      }
+    }
+
+    if (isRecurring) {
+      const latestTx = txs[0];
+      let finalName = latestTx.label; // Par défaut, le libellé brut (pour debug)
+      let finalIcon = latestTx.label.charAt(0).toUpperCase();
+
+      if (isKnown) {
+        const serviceKey = key.replace('__KNOWN__', '');
+        const info = KNOWN_SERVICES[serviceKey];
+        finalName = info.name;
+        finalIcon = info.icon;
+      } else {
+        // Pour les services inconnus, on utilise le "simpleLabel" (la clé du groupe) mais un peu plus propre
+        finalName = key.charAt(0).toUpperCase() + key.slice(1).toLowerCase();
+        if (finalName.length > 20) finalName = finalName.substring(0, 20) + '...';
+      }
+
+      // Calcul date renouvellement
+      const nextDate = new Date(latestTx.date);
+      nextDate.setMonth(nextDate.getMonth() + 1); // Par défaut +1 mois
+
+      // Si c'était annuel (basé sur l'historique), on met +1 an
+      if (txs.length >= 2) {
+        const diffTime = Math.abs(txs[0].date.getTime() - txs[1].date.getTime());
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        if (diffDays > 300) {
+          nextDate.setMonth(nextDate.getMonth() + 11); // On a déjà ajouté 1 mois, donc +11
+        }
+      }
+
+      detected.push({
+        service_name: finalName,
+        monthly_cost: latestTx.amount,
+        renewal_date: nextDate.toISOString().split('T')[0],
+        confidence: isKnown ? 'high' : 'medium',
+        icon: finalIcon
       });
     }
-  }
-  return subscriptions.sort((a, b) => b.monthly_cost - a.monthly_cost);
+  });
+
+  return detected;
 }
