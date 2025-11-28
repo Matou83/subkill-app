@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import CSVImport from '@/components/CSVImport';
 import CancellationWizard from '@/components/CancellationWizard';
+import BankConnection from '@/components/BankConnection';
 import { DetectedSubscription } from '@/lib/csvParser';
 
 // --- TYPES ---
@@ -302,6 +303,16 @@ export default function SubKillApp() {
         <StatCard title="Monthly Cost" value={formatCurrency(monthlyCost)} />
         <StatCard title="Annual Cost" value={formatCurrency(annualCost)} subtext="Estimated" />
         <StatCard title="Active Alerts" value={activeAlerts} alert={activeAlerts > 0} />
+      </div>
+
+      <div className="mb-8">
+        <BankConnection
+          userEmail="user@example.com"
+          onSuccess={(itemId) => {
+            console.log('Banque connectée avec succès:', itemId);
+            setShowSuccessToast('Compte bancaire connecté avec succès !');
+          }}
+        />
       </div>
 
       <div className="flex justify-between items-center">
