@@ -16,8 +16,8 @@ export async function POST(request: Request) {
                 headers: {
                     'Bridge-Version': '2025-01-15',
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${process.env.BRIDGE_CLIENT_SECRET}`,
                     'Client-Id': process.env.NEXT_PUBLIC_BRIDGE_CLIENT_ID!,
+                    'Client-Secret': process.env.BRIDGE_CLIENT_SECRET!,
                 },
                 body: JSON.stringify({
                     user_email: userEmail,
